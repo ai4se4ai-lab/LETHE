@@ -34,4 +34,6 @@ __pycache__/
 *.log.*.*.*.*.*.*.*.*.*
 
 evaluation/results/
+evaluation/data/envs/
+evaluation/data/precomputed/
 *.log.*.*.*.*.*.*.*.*.*.*   
