@@ -15,6 +15,7 @@ import json
 import os
 import re
 import shutil
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -23,9 +24,11 @@ import pyarrow.parquet as pq
 from lethe.core import run_proc
 
 ROOT = Path(__file__).resolve().parent
-DATA = ROOT / "data"
+DATA = Path(os.environ.get("LETHE_EVAL_DATA", str(ROOT / "data"))).resolve()
 ENVS = DATA / "envs"
-PARQUET = DATA / "swe-bench_lite.parquet"
+PARQUET = Path(
+    os.environ.get("LETHE_SWEBENCH_PARQUET", str(DATA / "swe-bench_lite.parquet"))
+).resolve()
 
 
 @dataclass
@@ -113,7 +116,11 @@ def venv_python(b: BugSpec) -> Path:
 
 
 def syspython() -> str:
-    return str(Path(__file__).resolve().parents[1] / ".venv/bin/python")
+    configured = os.environ.get("LETHE_PYTHON")
+    if configured:
+        return configured
+    local = Path(__file__).resolve().parents[1] / ".venv/bin/python"
+    return str(local if local.exists() else Path(sys.executable))
 
 
 def tail(s: str, n: int = 2000) -> str:

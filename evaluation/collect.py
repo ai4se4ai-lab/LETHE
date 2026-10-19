@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import re
 import sys
 from collections import defaultdict
@@ -23,8 +24,14 @@ sys.path.insert(0, str(ROOT))
 from evaluation import swebench as swe
 from evaluation import stats
 
-MAIN = Path(__file__).resolve().parent / "results" / "main"
-PRECOMP = Path(__file__).resolve().parent / "data" / "precomputed"
+MAIN = Path(
+    os.environ.get("LETHE_RESULTS", str(Path(__file__).resolve().parent / "results" / "main"))
+).resolve()
+PRECOMP = Path(
+    os.environ.get(
+        "LETHE_PRECOMP", str(Path(__file__).resolve().parent / "data" / "precomputed")
+    )
+).resolve()
 CSV = MAIN / "csv"
 SCHEMA_VERSION = "1"
 

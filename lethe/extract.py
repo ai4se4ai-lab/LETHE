@@ -10,6 +10,7 @@ Rules (plan §5.2):
 from __future__ import annotations
 
 import ast
+import hashlib
 from pathlib import Path
 
 from .core import Function, ProgramModel, Statement
@@ -54,13 +55,14 @@ def extract(root: Path) -> ProgramModel:
     pm = ProgramModel(root=root.as_posix())
     calls_raw: list[tuple[str, str]] = []
     unresolved: set[str] = set()
+    source_digest = hashlib.sha256()
 
     for p in sorted(root.rglob("*.py")):
         try:
             relp = p.relative_to(root)
         except ValueError:
             continue
-        if _is_test_path(relp) or p.name in ("setup.py", "conftest.py"):
+        if _is_test_path(relp) or p.name in ("__init__.py", "setup.py", "conftest.py"):
             continue
         try:
             src = p.read_text(errors="replace")
@@ -68,6 +70,10 @@ def extract(root: Path) -> ProgramModel:
         except SyntaxError:
             continue
         rf = relp.as_posix()
+        source_digest.update(rf.encode())
+        source_digest.update(b"\0")
+        source_digest.update(src.encode())
+        source_digest.update(b"\0")
         pm.components.append(rf)
 
         file_funcs: list[Function] = []
@@ -127,6 +133,7 @@ def extract(root: Path) -> ProgramModel:
                 by_id[fid].calls.append(target)
 
     pm.unresolved_calls = sorted(unresolved)
+    pm.source_hash = source_digest.hexdigest()
     pm.components = sorted(set(pm.components))
     seen: set[str] = set()
     pm.statements = [s for s in sorted(pm.statements, key=lambda s: (s.file, s.lineno))

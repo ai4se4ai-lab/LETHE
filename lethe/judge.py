@@ -155,6 +155,7 @@ def judge_probe(env: BugEnv, pm: ProgramModel, element: str, max_mutants: int,
             continue
         orig = target.read_bytes()
         try:
+            pr.mutants_run += 1
             target.write_text(m.text)
             f2p_ok, f_passed, f_total = _f2p_pass(env)
             pr.test_executions += 1
@@ -173,7 +174,6 @@ def judge_probe(env: BugEnv, pm: ProgramModel, element: str, max_mutants: int,
                 pr.best_pass = max(pr.best_pass, f_total + p_passed)
         finally:
             target.write_bytes(orig)
-        pr.mutants_run += 1
     pr.seconds = time.time() - t0
     ck.write_text(pr.model_dump_json(indent=1))
     return pr
@@ -218,10 +218,18 @@ def judge_candidate(env: BugEnv, pm: ProgramModel, candidate_id: str,
         progress.append(p_i / h["rank"])
         pos = spec_rank.get(el, 0)
         spec_pct.append(pos)
-        per_hyp.append({"rank": h["rank"], "element": el, "probe": "fixed" if pr.fixed else "not_fixed",
+        if pr.fixed:
+            probe_status = "fixed"
+        elif pr.truncated or pr.mutants_run == 0:
+            probe_status = "inconclusive"
+        else:
+            probe_status = "exonerated"
+        per_hyp.append({"rank": h["rank"], "element": el, "probe": probe_status,
                         "mutants_run": pr.mutants_run, "best_pass": pr.best_pass,
                         "total_tests": N, "fixing_edits": pr.fixing_edits,
-                        "cache_hit": pr.cache_hit, "truncated": pr.truncated})
+                        "cache_hit": pr.cache_hit, "truncated": pr.truncated,
+                        "compile_failures": pr.compile_failures,
+                        "timeouts": pr.timeouts})
 
     patch_valid: bool | None = None
     if patch:

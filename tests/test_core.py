@@ -25,12 +25,22 @@ def test_ochiai_hand():
     # ef=2 ep=1 nf=6 np=3
     ef, ep, nf, np_ = 2, 1, 6, 3
     import math
-    assert spectrum.ochiai(ef, ep, nf, np_) == pytest.approx(2 / math.sqrt(8 * 12))
+    assert spectrum.ochiai(ef, ep, nf, np_) == pytest.approx(2 / math.sqrt(8 * 3))
 
 
 def test_dstar_hand():
     ef, ep, nf, np_ = 2, 1, 6, 3
-    assert spectrum.dstar2(ef, ep, nf, np_) == pytest.approx((2 * 2 + 3 - 12) ** 2)
+    assert spectrum.dstar2(ef, ep, nf, np_) == pytest.approx(2**2 / (1 + 6))
+
+
+def test_other_sbfl_formulas_hand():
+    ef, ep, nf, np_ = 2, 1, 6, 3
+    fail_rate = 2 / 8
+    pass_rate = 1 / 4
+    assert spectrum.tarantula(ef, ep, nf, np_) == pytest.approx(
+        fail_rate / (fail_rate + pass_rate))
+    assert spectrum.barinel(ef, ep, nf, np_) == pytest.approx(1 - 1 / 3)
+    assert spectrum.op2(ef, ep, nf, np_) == pytest.approx(2 - 1 / 5)
 
 
 def test_rank_tie_average():
@@ -66,7 +76,7 @@ def shop_tree(tmp_path_factory):
 
 def test_extract_counts(shop_tree: Path):
     pm = extract.extract(shop_tree)
-    assert pm.components == ["shop/__init__.py", "shop/pricing.py"]
+    assert pm.components == ["shop/pricing.py"]
     fn_ids = {f.id for f in pm.functions}
     assert {"shop/pricing.py::loyalty_rate", "shop/pricing.py::bulk_rate"} <= fn_ids
     ids = {s.id for s in pm.statements}

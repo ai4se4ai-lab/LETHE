@@ -7,13 +7,17 @@ from typing import Callable
 Formula = Callable[[int, int, int, int], float]
 
 def ochiai(ef: int, ep: int, nf: int, np_: int) -> float:
+    """Ochiai suspiciousness using the standard contingency table."""
     if ef == 0:
         return 0.0
-    den = math.sqrt((ef + nf) * (ef + ep + nf + np_))
+    den = math.sqrt((ef + nf) * (ef + ep))
     return ef / den if den else 0.0
 
 def _dstar(ef: int, ep: int, nf: int, np_: int, k: float) -> float:
-    return (2 * ef + np_ - (ef + ep + nf + np_)) ** k
+    den = ep + nf
+    if den == 0:
+        return math.inf if ef else 0.0
+    return ef**k / den
 
 def dstar2(ef: int, ep: int, nf: int, np_: int) -> float:
     return _dstar(ef, ep, nf, np_, 2)
@@ -22,18 +26,17 @@ def dstar3(ef: int, ep: int, nf: int, np_: int) -> float:
     return _dstar(ef, ep, nf, np_, 3)
 
 def tarantula(ef: int, ep: int, nf: int, np_: int) -> float:
-    return nf / (nf + ef) if (nf + ef) else 0.0
+    fail_rate = ef / (ef + nf) if ef + nf else 0.0
+    pass_rate = ep / (ep + np_) if ep + np_ else 0.0
+    den = fail_rate + pass_rate
+    return fail_rate / den if den else 0.0
 
 def barinel(ef: int, ep: int, nf: int, np_: int) -> float:
-    ef, ep, nf, np_ = float(ef), float(ep), float(nf), float(np_)
-    if ef + nf == 0 or ef + np_ == 0:
-        return 0.0
-    return (0.5 * ef / (ef + nf) + 0.5 * nf / (ef + np_))
+    den = ef + ep
+    return 1.0 - (ep / den) if den else 0.0
 
 def op2(ef: int, ep: int, nf: int, np_: int) -> float:
-    if ef + ep + nf + np_ == 0:
-        return 0.0
-    return (ef / (ef + nf)) * (nf / (ef + np_)) if (ef + nf) and (ef + np_) else 0.0
+    return ef - ep / (ep + np_ + 1.0)
 
 FORMULAS: dict[str, Formula] = {
     "ochiai": ochiai, "dstar2": dstar2, "dstar3": dstar3,

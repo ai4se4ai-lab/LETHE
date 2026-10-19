@@ -25,7 +25,12 @@ from lethe import extract, spectrum as spec
 from evaluation import swebench as swe
 
 P2P_COVERAGE_SAMPLE = 12          # tests worth covering (cost control, logged)
-PRECOMP = Path(__file__).resolve().parent / "data" / "precomputed"
+PRECOMP = Path(
+    os.environ.get(
+        "LETHE_PRECOMP",
+        str(Path(__file__).resolve().parent / "data" / "precomputed"),
+    )
+).resolve()
 
 
 def _p2p_sample(p2p: list[str], k: int = 12) -> list[str]:
@@ -154,9 +159,9 @@ def precompute_bug(b: swe.BugSpec, force: bool = False) -> dict:
         s: dict[str, float] = {}
         for s_id in scored_ids:
             ef = sum(1 for t in failing if s_id in covers.get(t, set()))
-            ep = sum(1 for t in passing if s_id not in covers.get(t, set()))
-            nf = sum(1 for t in passing if s_id in covers.get(t, set()))
-            np_ = sum(1 for t in failing if s_id not in covers.get(t, set()))
+            ep = sum(1 for t in passing if s_id in covers.get(t, set()))
+            nf = sum(1 for t in failing if s_id not in covers.get(t, set()))
+            np_ = sum(1 for t in passing if s_id not in covers.get(t, set()))
             s[s_id] = scores[name](ef, ep, nf, np_)
         ranked[name] = list(spec.rank(s))
 

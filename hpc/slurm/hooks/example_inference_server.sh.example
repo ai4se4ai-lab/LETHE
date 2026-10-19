@@ -1,0 +1,14 @@
+# Example hook: a private LLM inference server per job (Ollama), sourced by stage.sh.
+# Rename to hooks/<stage>.sh (one stage) or hooks/all.sh (every stage) to activate.
+# Needs in cluster.env: OLLAMA_PREFIX (install dir with bin/ollama), OLLAMA_MODELS (model store on scratch),
+# and optionally OLLAMA_NUM_PARALLEL / OLLAMA_MAX_LOADED_MODELS sized to the GPU memory.
+_port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')
+export OLLAMA_HOST="127.0.0.1:$_port" OLLAMA_MODELS OLLAMA_KEEP_ALIVE=24h OLLAMA_FLASH_ATTENTION=1
+export OLLAMA_NUM_PARALLEL="${OLLAMA_NUM_PARALLEL:-8}" OLLAMA_MAX_LOADED_MODELS="${OLLAMA_MAX_LOADED_MODELS:-1}"
+export LLM_URL="http://$OLLAMA_HOST"                       # the steps read this
+"$OLLAMA_PREFIX/bin/ollama" serve > "$LOG_ROOT/env/ollama_${JOB_TAG}_r${SLURM_RESTART_COUNT:-0}.log" 2>&1 &
+SERVICE_PIDS+=($!)
+# readiness without sleep: curl retries the connection itself (up to ~3 min)
+curl -sf --retry 90 --retry-delay 2 --retry-connrefused --retry-all-errors -m 5 "$LLM_URL/api/version" >/dev/null \
+    || { log_error "inference server did not become ready"; return 1; }
+log_info "inference server ready at $LLM_URL"

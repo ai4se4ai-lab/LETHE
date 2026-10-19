@@ -14,14 +14,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from evaluation.swebench import load_dataset, setup, CANDIDATES  # noqa: E402
+from evaluation.swebench import CANDIDATES, env_dir, load_dataset, setup  # noqa: E402
 
 
 def main():
     bugs = {b.instance_id: b for b in load_dataset() if b.instance_id in CANDIDATES}
     todo = []
     for iid, b in sorted(bugs.items()):
-        stp = Path("evaluation/data/envs") / iid / "status.json"
+        stp = env_dir(b) / "status.json"
         if stp.exists():
             st = json.loads(stp.read_text())
             if st.get("ok"):
@@ -29,7 +29,7 @@ def main():
                 continue
         else:
             # wipe any partial env so setup can retry from scratch
-            d = Path("evaluation/data/envs") / iid
+            d = env_dir(b)
             if d.exists():
                 import shutil
                 shutil.rmtree(d, ignore_errors=True)

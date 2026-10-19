@@ -7,7 +7,9 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
+from pathlib import Path
 
 ROOT = __import__("pathlib").Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -16,12 +18,14 @@ from evaluation import swebench as swe
 from evaluation import baselines as bl
 from lethe.agent import DEFAULT_BASE, DEFAULT_MODEL
 
-PRECOMP = ROOT / "evaluation/data/precomputed"
-OUT = ROOT / "evaluation/results/main/baselines.json"
-SELECTED = ROOT / "evaluation/data/precomputed/_selected.json"
+PRECOMP = Path(os.environ.get("LETHE_PRECOMP", str(ROOT / "evaluation/data/precomputed"))).resolve()
+RESULTS = Path(os.environ.get("LETHE_RESULTS", str(ROOT / "evaluation/results/main"))).resolve()
+OUT = RESULTS / "baselines.json"
+SELECTED = Path(os.environ.get("LETHE_SELECTED", str(PRECOMP / "_selected.json"))).resolve()
 
 
 def main():
+    OUT.parent.mkdir(parents=True, exist_ok=True)
     keep = json.loads(SELECTED.read_text()) if SELECTED.exists() else sorted(
         p.stem for p in PRECOMP.glob("*.json") if not p.stem.startswith("_"))
     out = {}

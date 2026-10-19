@@ -391,12 +391,13 @@ class Harness:
             if ph["probe"] == "fixed":
                 self.facts[el] = {"kind": "confirmed", "candidate": cand_id, "agent": a.agent_id,
                                   "fixing_edits": ph.get("fixing_edits", [])}
-            elif ph["truncated"]:
+            elif ph["probe"] == "inconclusive":
                 self.facts.setdefault(el, {"kind": "inconclusive", "candidate": cand_id})
             else:
                 self.facts[el] = {"kind": "exonerated", "candidate": cand_id,
                                   "note": "single-edit assumption"}
-            self.events.log("probe", element=el, fixed=ph["probe"] == "fixed",
+            self.events.log("probe", element=el, probe=ph["probe"],
+                            fixed=ph["probe"] == "fixed", truncated=ph.get("truncated", False),
                             mutants_run=ph.get("mutants_run", 0), candidate=cand_id,
                             agent_id=a.agent_id, cache_hit=ph.get("cache_hit", False))
         self.events.log("judge_end", candidate=cand_id, score=jr.score,

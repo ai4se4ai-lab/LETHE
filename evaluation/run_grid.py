@@ -21,9 +21,15 @@ from lethe.harness import Harness, PRESET_CONFIGS
 from evaluation import swebench as swe
 from evaluation import metrics
 
-RESULTS = Path(__file__).resolve().parent / "results" / "main"
-SELECTED = Path(__file__).resolve().parent / "data" / "precomputed" / "_selected.json"
-PRECOMP = Path(__file__).resolve().parent / "data" / "precomputed"
+RESULTS = Path(
+    os.environ.get("LETHE_RESULTS", str(Path(__file__).resolve().parent / "results" / "main"))
+).resolve()
+PRECOMP = Path(
+    os.environ.get(
+        "LETHE_PRECOMP", str(Path(__file__).resolve().parent / "data" / "precomputed")
+    )
+).resolve()
+SELECTED = Path(os.environ.get("LETHE_SELECTED", str(PRECOMP / "_selected.json"))).resolve()
 
 PRINT_LOCK = threading.Lock()
 

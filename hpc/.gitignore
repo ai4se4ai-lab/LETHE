@@ -1,0 +1,3 @@
+# run logs and collected results are large; they live on /project but not in git
+logs/
+__pycache__/

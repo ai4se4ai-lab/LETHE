@@ -1,0 +1,146 @@
+{
+  "_comment": "LETHE experiment graph. Toy records exercise the full graph but are never reportable.",
+  "project": "lethe",
+  "require_gpu": true,
+  "vars": {
+    "N_ITEMS": "10",
+    "REPS": "3",
+    "MAIN_CONFIGS": "single,parallel4,team4,lethe",
+    "MAIN_CONFIGS_N": "4",
+    "ABLATION_CONFIGS": "lethe_candidate_only,lethe_views,lethe_raw,lethe_fixprobe_only,lethe_spectrum_judge",
+    "ABLATION_CONFIGS_N": "5",
+    "POLICY_CONFIGS": "lethe_fixed2,lethe_fixed3,lethe_fixed4,lethe_fixed6,lethe_plateau",
+    "POLICY_CONFIGS_N": "5",
+    "RQ6_CONFIGS": "continue,forget",
+    "RQ6_CONFIGS_N": "2"
+  },
+  "smoke": {
+    "vars": {
+      "N_ITEMS": "1",
+      "REPS": "1"
+    },
+    "time": "00:45:00",
+    "matrix_limit": 1,
+    "array_throttle": 1
+  },
+  "stages": [
+    {
+      "name": "setup",
+      "description": "M0-M3 gate: verify GPU, stage benchmark metadata, and validate the toy model.",
+      "internet": true,
+      "resources": {"gpus": "h100_1g.10gb:1", "cpus": 4, "mem": "16G", "time": "01:00:00"},
+      "steps": [
+        {"name": "check_gpu", "builtin": "check_gpu", "always": true, "critical": true},
+        {"name": "prepare", "cmd": "python -m evaluation.hpc_driver prepare --results {RESULTS}", "produces": ["setup/verify.json", "data/swe-bench_lite.parquet"], "critical": true},
+        {"name": "verify", "cmd": "python -c 'import json; d=json.load(open(\"{RESULTS}/setup/verify.json\")); assert (d[\"toy_components\"],d[\"toy_functions\"],d[\"toy_statements\"])==(3,12,33)'", "needs": ["setup/verify.json"], "critical": true, "always": true}
+      ]
+    },
+    {
+      "name": "tests",
+      "description": "M0-M3 acceptance tests, including the real toy mutation probe.",
+      "depends": [{"stage": "setup", "type": "afterok"}],
+      "resources": {"gpus": "h100_1g.10gb:1", "cpus": 4, "mem": "16G", "time": "01:00:00"},
+      "steps": [
+        {"name": "unit_and_golden", "cmd": "python -m evaluation.hpc_driver test --results {RESULTS}", "needs": ["setup/verify.json"], "produces": ["setup/tests.json"], "critical": true, "always": true}
+      ]
+    },
+    {
+      "name": "precompute",
+      "description": "Discover models, traces, spectra and frozen ground-truth metadata once per dataset.",
+      "depends": [{"stage": "tests", "type": "afterok"}],
+      "matrix": {"dataset": ["toy", "swebench-lite"]},
+      "array_throttle": 2,
+      "resources": {"gpus": "h100_1g.10gb:1", "cpus": 8, "mem": "32G", "time": "08:00:00", "requeue": true},
+      "steps": [
+        {"name": "precompute", "cmd": "python -m evaluation.hpc_driver precompute --results {RESULTS} --dataset {dataset} --n-items {N_ITEMS}", "needs": ["setup/verify.json"], "produces": ["precompute/{dataset}/manifest.json", "precompute/{dataset}/_selected.json"], "retries": 1}
+      ]
+    },
+    {
+      "name": "baselines",
+      "description": "RQ2 classical SBFL/MBFL and one-shot baselines for each precomputed dataset.",
+      "depends": [{"stage": "precompute", "type": "aftercorr"}],
+      "matrix_from": "precompute",
+      "resources": {"gpus": "h100_1g.10gb:1", "cpus": 8, "mem": "32G", "time": "08:00:00", "requeue": true},
+      "steps": [
+        {"name": "run", "cmd": "python -m evaluation.hpc_driver run --results {RESULTS} --dataset {dataset} --model-tier mock --study baselines --configs single --reps 1 --n-items {N_ITEMS} --out {RESULTS}/studies/baselines/mock__{dataset}.jsonl", "needs": ["precompute/{dataset}/*"], "produces": ["studies/baselines/mock__{dataset}.jsonl"], "progress": {"file": "studies/baselines/mock__{dataset}.jsonl", "expected": "{N_ITEMS}"}}
+      ]
+    },
+    {
+      "name": "main",
+      "description": "RQ1/RQ2 equal-budget matrix: four reducer settings for each model tier and dataset.",
+      "depends": [{"stage": "precompute", "type": "afterok"}],
+      "matrix": {"model_tier": ["mock", "small", "large"], "dataset": ["toy", "swebench-lite"]},
+      "array_throttle": 6,
+      "resources": {"gpus": "h100:1", "cpus": 12, "mem": "64G", "time": "24:00:00", "requeue": true},
+      "steps": [
+        {"name": "run", "cmd": "python -m evaluation.hpc_driver run --results {RESULTS} --dataset {dataset} --model-tier {model_tier} --study main --configs {MAIN_CONFIGS} --reps {REPS} --n-items {N_ITEMS} --out {RESULTS}/studies/main/{model_tier}__{dataset}.jsonl", "needs": ["precompute/{dataset}/*"], "produces": ["studies/main/{model_tier}__{dataset}.jsonl"], "progress": {"file": "studies/main/{model_tier}__{dataset}.jsonl", "expected": "{N_ITEMS}*{MAIN_CONFIGS_N}*{REPS}"}}
+      ]
+    },
+    {
+      "name": "ablations",
+      "description": "RQ3 model, memory, views and judge ablations.",
+      "depends": [{"stage": "precompute", "type": "afterok"}],
+      "matrix": {"model_tier": ["small", "large"], "dataset": ["toy", "swebench-lite"]},
+      "array_throttle": 4,
+      "resources": {"gpus": "h100:1", "cpus": 12, "mem": "64G", "time": "24:00:00", "requeue": true},
+      "steps": [
+        {"name": "run", "cmd": "python -m evaluation.hpc_driver run --results {RESULTS} --dataset {dataset} --model-tier {model_tier} --study ablations --configs {ABLATION_CONFIGS} --reps {REPS} --n-items {N_ITEMS} --out {RESULTS}/studies/ablations/{model_tier}__{dataset}.jsonl", "needs": ["precompute/{dataset}/*"], "produces": ["studies/ablations/{model_tier}__{dataset}.jsonl"], "progress": {"file": "studies/ablations/{model_tier}__{dataset}.jsonl", "expected": "{N_ITEMS}*{ABLATION_CONFIGS_N}*{REPS}"}}
+      ]
+    },
+    {
+      "name": "forget_policy",
+      "description": "RQ5 fixed 2/3/4/6 rounds versus plateau-triggered forgetting.",
+      "depends": [{"stage": "precompute", "type": "afterok"}],
+      "matrix": {"model_tier": ["small", "large"], "dataset": ["toy", "swebench-lite"]},
+      "array_throttle": 4,
+      "resources": {"gpus": "h100:1", "cpus": 12, "mem": "64G", "time": "24:00:00", "requeue": true},
+      "steps": [
+        {"name": "run", "cmd": "python -m evaluation.hpc_driver run --results {RESULTS} --dataset {dataset} --model-tier {model_tier} --study forget_policy --configs {POLICY_CONFIGS} --reps {REPS} --n-items {N_ITEMS} --out {RESULTS}/studies/forget_policy/{model_tier}__{dataset}.jsonl", "needs": ["precompute/{dataset}/*"], "produces": ["studies/forget_policy/{model_tier}__{dataset}.jsonl"], "progress": {"file": "studies/forget_policy/{model_tier}__{dataset}.jsonl", "expected": "{N_ITEMS}*{POLICY_CONFIGS_N}*{REPS}"}}
+      ]
+    },
+    {
+      "name": "same_state",
+      "description": "RQ6 continue versus forget from the same plateau snapshot.",
+      "depends": [{"stage": "main", "type": "afterany"}],
+      "matrix_from": "main",
+      "resources": {"gpus": "h100:1", "cpus": 12, "mem": "64G", "time": "12:00:00", "requeue": true},
+      "steps": [
+        {"name": "fork", "cmd": "python -m evaluation.hpc_driver run --results {RESULTS} --dataset {dataset} --model-tier {model_tier} --study same_state --configs {RQ6_CONFIGS} --reps {REPS} --n-items {N_ITEMS} --out {RESULTS}/studies/same_state/{model_tier}__{dataset}.jsonl", "needs": ["studies/main/{model_tier}__{dataset}.jsonl"], "produces": ["studies/same_state/{model_tier}__{dataset}.jsonl"], "progress": {"file": "studies/same_state/{model_tier}__{dataset}.jsonl", "expected": "{N_ITEMS}*{RQ6_CONFIGS_N}*{REPS}"}}
+      ]
+    },
+    {
+      "name": "analysis",
+      "description": "RQ1-RQ6 statistics, coverage audit, tables and figures from all available records.",
+      "depends": [{"stage": "baselines", "type": "afterany"}, {"stage": "main", "type": "afterany"}, {"stage": "ablations", "type": "afterany"}, {"stage": "forget_policy", "type": "afterany"}, {"stage": "same_state", "type": "afterany"}],
+      "resources": {"gpus": "h100_1g.10gb:1", "cpus": 4, "mem": "32G", "time": "04:00:00"},
+      "steps": [
+        {"name": "analyze", "cmd": "python -m evaluation.hpc_driver analyze --results {RESULTS}", "needs": ["studies/**/*.jsonl"], "produces": ["analysis/summary.json", "analysis/summary.md"], "always": true}
+      ]
+    },
+    {
+      "name": "collect",
+      "description": "Collect CSVs, paper tables/figures, manifests, GPU telemetry and the pipeline ledger.",
+      "depends": [{"stage": "analysis", "type": "afterany"}],
+      "resources": {"gpus": "h100_1g.10gb:1", "cpus": 2, "mem": "16G", "time": "02:00:00"},
+      "steps": [
+        {"name": "collect", "builtin": "collect", "always": true}
+      ]
+    }
+  ],
+  "results": {
+    "tables": [
+      {"name": "main_runs", "glob": "studies/main/*.jsonl"},
+      {"name": "ablations", "glob": "studies/ablations/*.jsonl"},
+      {"name": "forget_policy", "glob": "studies/forget_policy/*.jsonl"},
+      {"name": "same_state", "glob": "studies/same_state/*.jsonl"}
+    ],
+    "summaries": [
+      {"name": "top1_by_config", "table": "main_runs", "group_by": ["model_tier", "dataset", "config_name"], "metrics": {"method_top1": ["mean", "count"], "stmt_top1": "mean", "success": "rate"}}
+    ],
+    "plots": [
+      {"name": "method_top1", "summary": "top1_by_config", "kind": "bar", "x": "config_name", "y": "method_top1_mean", "hue": "model_tier", "title": "Method Top-1 by configuration"}
+    ],
+    "copy": ["analysis/**", "setup/*.json", "studies/**/*.jsonl"],
+    "archive": ["runs"]
+  }
+}
